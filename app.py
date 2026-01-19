@@ -2,16 +2,17 @@ from flask import Flask, render_template, request, redirect, jsonify
 import psycopg2
 import random
 import string
+import os
 
 app = Flask(__name__)
 
-# Database connection
+# Database connection (works with Docker environment variables)
 def get_db():
     return psycopg2.connect(
-        database="urlshortener",
-        user="appuser",
-        password="dev_password_123",
-        host="localhost"
+        database=os.getenv('DATABASE_NAME', 'urlshortener'),
+        user=os.getenv('DATABASE_USER', 'appuser'),
+        password=os.getenv('DATABASE_PASSWORD', 'dev_password_123'),
+        host=os.getenv('DATABASE_HOST', 'localhost')
     )
 
 # Generate random short code
@@ -34,6 +35,7 @@ def shorten_url():
     if not original_url:
         return jsonify({'error': 'URL required'}), 400
     
+    # Use custom code if provided, otherwise generate random
     if custom_code:
         if len(custom_code) < 3:
             return jsonify({'error': 'Custom code must be at least 3 characters'}), 400
@@ -60,6 +62,8 @@ def shorten_url():
             'short_code': result[0]
         })
     except Exception as e:
+        if 'duplicate key' in str(e).lower():
+            return jsonify({'error': 'This custom code is already taken'}), 400
         return jsonify({'error': str(e)}), 500
 
 # Redirect short URL
@@ -108,4 +112,5 @@ def get_stats(short_code):
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Listen on all interfaces (required for Docker)
+    app.run(host='0.0.0.0', port=5000, debug=True)
